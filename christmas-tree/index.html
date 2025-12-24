@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<title>Ethereal Christmas Tree</title>
+<style>
+html,body{
+  margin:0;
+  padding:0;
+  overflow:hidden;
+  background:#050505;
+}
+</style>
+</head>
+<body>
+
+<script type="importmap">
+{
+  "imports":{
+    "three":"https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+/* ================= 基础 ================= */
+const isMobile=/Mobi|Android/i.test(navigator.userAgent);
+const TREE_COUNT=isMobile?6000:9000;
+const RIBBON_COUNT=520;
+const SNOW_COUNT=isMobile?800:1400;
+
+const scene=new THREE.Scene();
+
+/* ================= 相机 ================= */
+const camera=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,0.1,150);
+camera.position.set(0,9,55);
+
+/* ================= 🎵 背景音乐（Three.js） ================= */
+const listener = new THREE.AudioListener();
+camera.add(listener);
+
+const bgm = new THREE.Audio(listener);
+const audioLoader = new THREE.AudioLoader();
+
+audioLoader.load(
+  './Anson Seabra - Christmas List.mp3',
+  buffer=>{
+    bgm.setBuffer(buffer);
+    bgm.setLoop(true);
+    bgm.setVolume(0.45);
+  }
+);
+
+/* 首次交互播放（兼容浏览器自动播放策略） */
+addEventListener('click',()=>{
+  if(bgm.buffer && !bgm.isPlaying) bgm.play();
+},{ once:true });
+
+/* ================= 渲染 ================= */
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const composer=new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene,camera));
+composer.addPass(new UnrealBloomPass(
+  new THREE.Vector2(innerWidth,innerHeight),
+  1.15,0.5,0.38
+));
+
+/* ================= 艺术状态 ================= */
+const art={rotate:0};
+
+/* ================= 树体 ================= */
+const height=28;
+const radius=14;
+
+const geo=new THREE.BufferGeometry();
+const pos=new Float32Array(TREE_COUNT*3);
+const base=new Float32Array(TREE_COUNT*3);
+const col=new Float32Array(TREE_COUNT*3);
+
+const PINK=new THREE.Color().setHSL(0.92,0.75,0.6);
+const WHITE=new THREE.Color().setHSL(0,0,0.92);
+const GOLD=new THREE.Color().setHSL(0.12,0.6,0.6);
+
+for(let i=0;i<TREE_COUNT;i++){
+  const t=Math.random();
+  const y=(1-t)*height-height/2;
+  const r=t*radius*Math.random();
+  const a=Math.random()*Math.PI*2;
+  const x=Math.cos(a)*r;
+  const z=Math.sin(a)*r;
+
+  pos.set([x,y,z],i*3);
+  base.set([x,y,z],i*3);
+
+  const rc=Math.random();
+  const c=rc<0.7?PINK:rc<0.88?WHITE:GOLD;
+  col.set([c.r,c.g,c.b],i*3);
+}
+
+geo.setAttribute('position',new THREE.BufferAttribute(pos,3));
+geo.setAttribute('color',new THREE.BufferAttribute(col,3));
+
+const tree=new THREE.Points(
+  geo,
+  new THREE.PointsMaterial({
+    size:0.1,
+    vertexColors:true,
+    transparent:true,
+    opacity:0.82,
+    blending:THREE.AdditiveBlending,
+    depthWrite:false
+  })
+);
+scene.add(tree);
+
+/* ================= 树顶星星 ================= */
+const starGeo=new THREE.BufferGeometry();
+const starPos=new Float32Array(260*3);
+for(let i=0;i<260;i++){
+  const r=Math.random()*1.1;
+  const a=Math.random()*Math.PI*2;
+  starPos.set([
+    Math.cos(a)*r,
+    Math.random()*1.2,
+    Math.sin(a)*r
+  ],i*3);
+}
+starGeo.setAttribute('position',new THREE.BufferAttribute(starPos,3));
+
+const star=new THREE.Points(
+  starGeo,
+  new THREE.PointsMaterial({
+    color:GOLD,
+    size:0.18,
+    transparent:true,
+    blending:THREE.AdditiveBlending
+  })
+);
+star.position.y=height/2+0.8;
+scene.add(star);
+
+/* ================= 🎄 Merry Christmas 字体 ================= */
+const textCanvas=document.createElement('canvas');
+textCanvas.width=1024;
+textCanvas.height=256;
+const tctx=textCanvas.getContext('2d');
+
+function drawText(alpha=1){
+  tctx.clearRect(0,0,1024,256);
+  tctx.globalAlpha=alpha;
+
+  const grad=tctx.createLinearGradient(0,0,1024,0);
+  grad.addColorStop(0,'#ffd6ea');
+  grad.addColorStop(0.5,'#ffffff');
+  grad.addColorStop(1,'#ffd6ea');
+
+  tctx.fillStyle=grad;
+  tctx.font='72px "Brush Script MT",cursive';
+  tctx.textAlign='center';
+  tctx.textBaseline='middle';
+  tctx.shadowColor='#ffd6ea';
+  tctx.shadowBlur=16;
+
+  tctx.fillText('Merry Christmas!',512,128);
+}
+drawText();
+
+const textTex=new THREE.CanvasTexture(textCanvas);
+const textSprite=new THREE.Sprite(
+  new THREE.SpriteMaterial({
+    map:textTex,
+    transparent:true,
+    opacity:0.9,
+    blending:THREE.AdditiveBlending,
+    depthWrite:false
+  })
+);
+textSprite.scale.set(26,6,1);
+textSprite.position.set(0,height/2+4.8,0);
+scene.add(textSprite);
+
+/* ================= 飘带 ================= */
+const ribbons=[];
+for(let k=0;k<3;k++){
+  const g=new THREE.BufferGeometry();
+  const p=new Float32Array(RIBBON_COUNT*3);
+  const baseY=new Float32Array(RIBBON_COUNT);
+  const baseR=new Float32Array(RIBBON_COUNT);
+  const baseA=new Float32Array(RIBBON_COUNT);
+
+  for(let i=0;i<RIBBON_COUNT;i++){
+    const t=i/RIBBON_COUNT;
+    const y=(1-t)*height-height/2;
+    const r=t*radius*1.15;
+    const a=t*Math.PI*6+k*2;
+
+    p.set([Math.cos(a)*r,y,Math.sin(a)*r],i*3);
+    baseY[i]=y;
+    baseR[i]=r;
+    baseA[i]=a;
+  }
+
+  g.setAttribute('position',new THREE.BufferAttribute(p,3));
+
+  const m=new THREE.PointsMaterial({
+    color:new THREE.Color().setHSL(0.1,0.4,0.7),
+    size:0.11,
+    transparent:true,
+    opacity:0.4,
+    blending:THREE.AdditiveBlending,
+    depthWrite:false
+  });
+
+  const pts=new THREE.Points(g,m);
+  scene.add(pts);
+
+  ribbons.push({geo:g,mat:m,baseY,baseR,baseA,time:Math.random()*10});
+}
+
+/* ================= 雪花 ================= */
+const snowGeo=new THREE.BufferGeometry();
+const snowPos=new Float32Array(SNOW_COUNT*3);
+const snowSpd=new Float32Array(SNOW_COUNT);
+
+for(let i=0;i<SNOW_COUNT;i++){
+  snowPos.set([
+    (Math.random()-0.5)*140,
+    Math.random()*80-20,
+    (Math.random()-0.5)*140
+  ],i*3);
+  snowSpd[i]=0.12+Math.random()*0.2;
+}
+snowGeo.setAttribute('position',new THREE.BufferAttribute(snowPos,3));
+
+const snow=new THREE.Points(
+  snowGeo,
+  new THREE.PointsMaterial({
+    color:new THREE.Color().setHSL(0,0,0.95),
+    size:0.32,
+    transparent:true,
+    opacity:0.55,
+    blending:THREE.AdditiveBlending,
+    depthWrite:false
+  })
+);
+scene.add(snow);
+
+/* ================= 动画 ================= */
+let time=0;
+function animate(){
+  requestAnimationFrame(animate);
+  time+=0.01;
+
+  for(let i=0;i<pos.length;i+=3){
+    const by=base[i+1];
+    const layer=(height/2-by)/height;
+    const flick=1+Math.sin(time*2+layer*6)*0.06;
+    pos[i]=base[i]*flick;
+    pos[i+1]=by+Math.sin(time+layer*5)*0.06;
+    pos[i+2]=base[i+2]*flick;
+  }
+  geo.attributes.position.needsUpdate=true;
+  tree.rotation.y+=art.rotate;
+
+  star.scale.setScalar(1+Math.sin(time*2.2)*0.15);
+
+  drawText(0.85+Math.sin(time*2)*0.1);
+  textTex.needsUpdate=true;
+
+  ribbons.forEach(r=>{
+    r.time+=0.01;
+    const p=r.geo.attributes.position.array;
+    for(let i=0;i<RIBBON_COUNT;i++){
+      const t=i/RIBBON_COUNT;
+      const air=t*t;
+      const wind=Math.sin(r.time+t*6)*0.35+
+                 Math.sin(r.time*1.6+t*10)*0.15;
+      const rr=r.baseR[i]*(1+wind*0.12*air);
+      const y=r.baseY[i]+wind*0.4*air;
+      const a=r.baseA[i]+r.time*0.5+wind*0.25;
+      const i3=i*3;
+      p[i3]=Math.cos(a)*rr;
+      p[i3+1]=y;
+      p[i3+2]=Math.sin(a)*rr;
+    }
+    r.geo.attributes.position.needsUpdate=true;
+    r.mat.opacity=0.38+Math.sin(r.time*2)*0.06;
+  });
+
+  const sp=snowGeo.attributes.position.array;
+  for(let i=0;i<SNOW_COUNT;i++){
+    const i3=i*3;
+    sp[i3+1]-=snowSpd[i];
+    if(sp[i3+1]<-50)sp[i3+1]=60;
+  }
+  snowGeo.attributes.position.needsUpdate=true;
+
+  composer.render();
+}
+animate();
+
+/* ================= 交互 ================= */
+addEventListener('mousemove',e=>{
+  art.rotate=(e.clientX/innerWidth-0.5)*0.01;
+});
+addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+  composer.setSize(innerWidth,innerHeight);
+});
+</script>
+</body>
+</html>
